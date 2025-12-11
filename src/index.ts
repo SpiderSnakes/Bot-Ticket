@@ -5,6 +5,8 @@ import { handleInteraction } from './core/interactionHandler.js';
 import { log } from './utils/logging.js';
 import { replyV2 } from './utils/v2Messages.js';
 import { createErrorV2Message } from './componentsV2/builder.js';
+import { isTicketChannel, removeTicket } from './features/tickets/ticketManager.js';
+import { ChannelType } from 'discord.js';
 
 const client = createClient();
 
@@ -47,6 +49,16 @@ client.on('interactionCreate', async (interaction) => {
 // Gestion des erreurs non capturées
 client.on('error', (error) => {
   log.error('Erreur client Discord:', error);
+});
+
+// Nettoyage des tickets si un salon est supprimé manuellement
+client.on('channelDelete', (channel) => {
+  if (channel && 'type' in channel && channel.type === ChannelType.GuildText) {
+    if (isTicketChannel(channel)) {
+      removeTicket(channel.id);
+      log.info(`Ticket supprimé manuellement, cache nettoyé: ${channel.id}`);
+    }
+  }
 });
 
 process.on('unhandledRejection', (error) => {

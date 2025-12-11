@@ -2,9 +2,9 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from '
 import { Command } from '../../types/command.js';
 import { getGuildConfig } from '../../config/guildConfig.js';
 import { TICKET_TYPES, getTicketTypeById, TicketTypeId } from '../../features/tickets/ticketTypes.js';
-import { createTicket } from '../../features/tickets/ticketManager.js';
+import { createTicket, findExistingTicket } from '../../features/tickets/ticketManager.js';
 import { buildTicketCreatedMessage } from '../../componentsV2/tickets.js';
-import { createErrorV2Message } from '../../componentsV2/builder.js';
+import { createErrorV2Message, createInfoV2Message } from '../../componentsV2/builder.js';
 import { replyV2, editReplyV2 } from '../../utils/v2Messages.js';
 
 const ticketCommand: Command = {
@@ -89,6 +89,17 @@ const ticketCommand: Command = {
         );
         return;
       }
+    }
+
+    // Anti-duplication : vérifier l'existence d'un ticket du même type pour cet utilisateur
+    const existingChannel = await findExistingTicket(interaction.guild, targetUser.id, ticketType.id);
+    if (existingChannel) {
+      const infoMessage = createInfoV2Message(
+        'Ticket déjà ouvert',
+        `Un ticket ${ticketType.emoji} **${ticketType.label}** existe déjà : <#${existingChannel.id}>`
+      );
+      await editReplyV2(interaction, { ...infoMessage, flags: infoMessage.flags | MessageFlags.Ephemeral });
+      return;
     }
 
     // Créer le ticket

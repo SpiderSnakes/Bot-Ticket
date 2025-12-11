@@ -15,6 +15,7 @@ import { followUpV2, replyV2 } from '../../utils/v2Messages.js';
 import { createErrorV2Message, createSuccessV2Message } from '../../componentsV2/builder.js';
 import { buildTicketPanelMessage } from '../../componentsV2/tickets.js';
 import { sendV2 } from '../../utils/v2Messages.js';
+import { log } from '../../utils/logging.js';
 
 export async function handleSetupRoleSelectMenu(
   interaction: RoleSelectMenuInteraction
@@ -203,15 +204,35 @@ export async function handleSetupFullSave(
     return;
   }
 
-  setGuildConfig({
+  const newConfig = {
     guildId: interaction.guild.id,
     ticketBaseChannelId: baseChannelId!,
     ticketCategoryId: categoryId!,
     transcriptChannelId: transcriptChannelId!,
     staffRoleIds,
-  });
+  };
+
+  // Enregistrer la nouvelle config
+  setGuildConfig(newConfig);
 
   draftByGuildUser.delete(draftKey(interaction.guild.id, interaction.user.id));
+
+  // Nettoyer l'ancien panneau s'il existe
+  const previousPanelMessageId = existing?.ticketPanelMessageId;
+  const previousBaseChannelId = existing?.ticketBaseChannelId;
+
+  if (previousPanelMessageId && previousBaseChannelId) {
+    try {
+      const previousBaseChannel = await interaction.guild.channels.fetch(previousBaseChannelId);
+      if (previousBaseChannel && previousBaseChannel.type === ChannelType.GuildText) {
+        const previousMessage = await previousBaseChannel.messages.fetch(previousPanelMessageId);
+        await previousMessage.unpin().catch(() => undefined);
+        await previousMessage.delete().catch(() => undefined);
+      }
+    } catch (err) {
+      log.warn('Impossible de supprimer l’ancien panneau de tickets (non bloquant):', err);
+    }
+  }
 
   // Envoyer le panneau de tickets dans le salon configuré
   try {
@@ -224,7 +245,7 @@ export async function handleSetupFullSave(
     }
   } catch (err) {
     // On log mais on n'empêche pas la confirmation
-    console.error('Impossible d\'envoyer le panneau de tickets:', err);
+    log.error('Impossible d\'envoyer le panneau de tickets:', err);
   }
 
   await replyV2(

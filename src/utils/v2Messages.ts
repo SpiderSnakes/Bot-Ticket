@@ -2,6 +2,7 @@ import {
   RepliableInteraction,
   TextChannel,
   MessageFlags,
+  Message,
 } from 'discord.js';
 import { V2MessageOptions } from '../componentsV2/builder.js';
 
@@ -11,25 +12,31 @@ import { V2MessageOptions } from '../componentsV2/builder.js';
  */
 export type V2MessagePayload = V2MessageOptions;
 
-export async function replyV2(interaction: RepliableInteraction, payload: V2MessagePayload) {
-  return interaction.reply(payload as any);
+export async function replyV2(
+  interaction: RepliableInteraction,
+  payload: V2MessagePayload
+): Promise<unknown> {
+  return interaction.reply(payload);
 }
 
 export async function editReplyV2(
   interaction: RepliableInteraction,
   payload: V2MessagePayload
-) {
-  return interaction.editReply(payload as any);
+): Promise<unknown> {
+  return interaction.editReply(payload);
 }
 
 export async function followUpV2(
   interaction: RepliableInteraction,
   payload: V2MessagePayload
-) {
-  return interaction.followUp(payload as any);
+): Promise<unknown> {
+  return interaction.followUp(payload);
 }
 
-export async function sendV2(channel: TextChannel, payload: V2MessagePayload) {
+export async function sendV2(
+  channel: TextChannel,
+  payload: V2MessagePayload
+): Promise<Message<boolean>> {
   // Sécurité : s'assurer que le flag Components V2 est présent.
   if ((payload.flags & MessageFlags.IsComponentsV2) !== MessageFlags.IsComponentsV2) {
     payload.flags = (payload.flags ?? 0) | MessageFlags.IsComponentsV2;

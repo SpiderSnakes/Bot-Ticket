@@ -3,6 +3,7 @@ import {
   ButtonInteraction,
   StringSelectMenuInteraction,
   RoleSelectMenuInteraction,
+  ChannelSelectMenuInteraction,
   ModalSubmitInteraction,
 } from 'discord.js';
 import { log } from '../utils/logging.js';
@@ -119,7 +120,9 @@ async function handleRoleSelectMenuInteraction(
   );
 }
 
-async function handleChannelSelectMenuInteraction(interaction: any): Promise<void> {
+async function handleChannelSelectMenuInteraction(
+  interaction: ChannelSelectMenuInteraction
+): Promise<void> {
   const customId = interaction.customId;
 
   log.debug(`Channel select menu: ${customId} par ${interaction.user.tag}`);

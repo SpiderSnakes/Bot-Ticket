@@ -10,7 +10,9 @@ import {
   Channel,
   GuildBasedChannel,
   MessageFlags,
+  Message,
 } from 'discord.js';
+import type { Timeout } from 'node:timers';
 import { getGuildConfig } from '../../config/guildConfig.js';
 import { TicketType, TicketTypeId, getTicketTypeById, getTicketTypeByPrefix } from './ticketTypes.js';
 import { generateTicketChannelName, parseTicketChannelName } from './channelNaming.js';
@@ -39,6 +41,8 @@ interface TicketInfo {
   userId: string;
   typeId: TicketTypeId;
   createdAt: Date;
+  templateMessageIds: string[];
+  templateTimeout: Timeout | null;
 }
 
 const activeTickets = new Map<string, TicketInfo>();
@@ -76,6 +80,45 @@ export function getTicketInfo(channelId: string): TicketInfo | undefined {
 }
 
 /**
+ * Retire un ticket du cache (ex: salon supprimé manuellement)
+ */
+export function removeTicket(channelId: string): void {
+  const ticket = activeTickets.get(channelId);
+  if (ticket?.templateTimeout) {
+    clearTimeout(ticket.templateTimeout);
+  }
+  activeTickets.delete(channelId);
+}
+
+/**
+ * Recherche un ticket existant pour un user + type
+ */
+export async function findExistingTicket(
+  guild: Guild,
+  userId: string,
+  typeId: TicketTypeId
+): Promise<TextChannel | null> {
+  for (const ticket of activeTickets.values()) {
+    if (ticket.guildId === guild.id && ticket.userId === userId && ticket.typeId === typeId) {
+      const channel = await guild.channels.fetch(ticket.channelId).catch(() => null);
+      if (channel && channel.type === ChannelType.GuildText) {
+        return channel as TextChannel;
+      }
+    }
+  }
+  return null;
+}
+
+async function logTicketEvent(
+  channel: TextChannel,
+  title: string,
+  description: string
+): Promise<Message<boolean>> {
+  const logMessage = createInfoV2Message(title, description);
+  return sendV2(channel, logMessage);
+}
+
+/**
  * Crée un nouveau ticket
  */
 export async function createTicket(
@@ -87,6 +130,15 @@ export async function createTicket(
 
   if (!config) {
     log.error(`Configuration non trouvée pour le serveur ${guild.id}`);
+    return null;
+  }
+
+  // Vérifier la catégorie de tickets
+  const category = guild.channels.cache.get(config.ticketCategoryId);
+  if (!category || category.type !== ChannelType.GuildCategory) {
+    log.error(
+      `Catégorie de tickets introuvable ou invalide (${config.ticketCategoryId}) pour le serveur ${guild.id}`
+    );
     return null;
   }
 
@@ -143,6 +195,8 @@ export async function createTicket(
       userId: user.id,
       typeId: ticketType.id,
       createdAt: new Date(),
+      templateMessageIds: [],
+      templateTimeout: null,
     });
 
     // Envoyer le message initial
@@ -153,16 +207,46 @@ export async function createTicket(
     await sentMessage.pin();
 
     // Programmer l'envoi du template automatique (20 secondes)
-    setTimeout(async () => {
+    const timeout = setTimeout(async () => {
       try {
-        const template = getAutoTemplate(ticketType.autoTemplateId);
+        const currentTicket = activeTickets.get(channel.id);
+        if (!currentTicket) {
+          return;
+        }
+
+        const currentType = getTicketTypeById(currentTicket.typeId);
+        if (!currentType) {
+          return;
+        }
+
+        const template = getAutoTemplate(currentType.autoTemplateId);
         if (template) {
-          await sendV2(channel, template);
+          const templateMessage = await sendV2(channel, template);
+          const updatedTicket = activeTickets.get(channel.id);
+
+          if (updatedTicket) {
+            updatedTicket.templateMessageIds = [
+              ...(updatedTicket.templateMessageIds ?? []),
+              templateMessage.id,
+            ];
+            updatedTicket.templateTimeout = null;
+            activeTickets.set(channel.id, updatedTicket);
+          }
+        } else {
+          log.warn(
+            `Aucun template automatique trouvé pour le type ${currentType.id} lors de la création du ticket ${channel.id}`
+          );
         }
       } catch (error) {
         log.error(`Erreur lors de l'envoi du template automatique:`, error);
       }
     }, 20000);
+
+    const ticket = activeTickets.get(channel.id);
+    if (ticket) {
+      ticket.templateTimeout = timeout;
+      activeTickets.set(channel.id, ticket);
+    }
 
     log.success(`Ticket créé: ${channel.name} pour ${user.tag}`);
     return channel;
@@ -178,6 +262,10 @@ export async function createTicket(
 export async function closeTicket(channel: TextChannel): Promise<boolean> {
   try {
     // Supprimer du stockage
+    const ticket = activeTickets.get(channel.id);
+    if (ticket?.templateTimeout) {
+      clearTimeout(ticket.templateTimeout);
+    }
     activeTickets.delete(channel.id);
 
     // Envoyer un message de fermeture
@@ -217,8 +305,25 @@ export async function changeTicketType(
     return false;
   }
 
+  // Supprimer les anciens messages de template et annuler le timer
+  if (ticketInfo.templateTimeout) {
+    clearTimeout(ticketInfo.templateTimeout);
+    ticketInfo.templateTimeout = null;
+  }
+  // Supprimer les anciens messages de template
+  const templateMessageIds = ticketInfo.templateMessageIds ?? [];
+  for (const messageId of templateMessageIds) {
+    try {
+      const message = await channel.messages.fetch(messageId);
+      await message.delete();
+    } catch (error) {
+      log.warn(`Impossible de supprimer l'ancien template ${messageId}:`, error);
+    }
+  }
+
   // Mettre à jour le stockage
   ticketInfo.typeId = newTypeId;
+  ticketInfo.templateMessageIds = [];
   activeTickets.set(channel.id, ticketInfo);
 
   // Optionnel: renommer le salon
@@ -242,6 +347,25 @@ export async function changeTicketType(
   // Envoyer un message de notification
   const changeMessage = buildTicketTypeChangedMessage(oldType, newType, changedBy);
   await sendV2(channel, changeMessage);
+
+  // Envoyer le nouveau template correspondant
+  const newTemplate = getAutoTemplate(newType.autoTemplateId);
+  if (newTemplate) {
+    try {
+      const newTemplateMessage = await sendV2(channel, newTemplate);
+      const updatedTicket = activeTickets.get(channel.id);
+
+      if (updatedTicket) {
+        updatedTicket.templateMessageIds = [newTemplateMessage.id];
+        updatedTicket.templateTimeout = null;
+        activeTickets.set(channel.id, updatedTicket);
+      }
+    } catch (error) {
+      log.error(`Erreur lors de l'envoi du nouveau template automatique:`, error);
+    }
+  } else {
+    log.warn(`Aucun template automatique trouvé pour le type ${newType.id} lors du changement de type`);
+  }
 
   log.info(`Type de ticket changé: ${channel.name} de ${oldType.label} à ${newType.label}`);
   return true;
@@ -270,6 +394,20 @@ export async function handleTicketSelectMenu(
         interaction,
         createErrorV2Message('Contexte invalide', 'Cette action se fait uniquement sur un serveur.')
       );
+      return;
+    }
+
+    const existingChannel = await findExistingTicket(
+      interaction.guild,
+      interaction.user.id,
+      ticketType.id
+    );
+    if (existingChannel) {
+      const infoMessage = createInfoV2Message(
+        'Ticket déjà ouvert',
+        `Un ticket ${ticketType.emoji} **${ticketType.label}** existe déjà : <#${existingChannel.id}>`
+      );
+      await replyV2(interaction, { ...infoMessage, flags: infoMessage.flags | MessageFlags.Ephemeral });
       return;
     }
 
@@ -385,13 +523,10 @@ export async function handleTicketModal(interaction: ModalSubmitInteraction): Pr
         createSuccessV2Message('Salon renommé', `\`${oldName}\` → \`${newName}\``)
       );
 
-      // Message de log dans le salon
-      await sendV2(
+      await logTicketEvent(
         channel,
-        createInfoV2Message(
-          'Renommage',
-          `Salon renommé par ${interaction.user}: \`${oldName}\` → \`${newName}\``
-        )
+        'Renommage',
+        `Salon renommé par ${interaction.user}: \`${oldName}\` → \`${newName}\``
       );
     } catch (error) {
       log.error('Erreur lors du renommage du salon:', error);

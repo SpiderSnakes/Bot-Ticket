@@ -22,6 +22,7 @@ import deleteCommand from '../commands/tickets/delete.js';
 import renameCommand from '../commands/tickets/rename.js';
 import transcriptCommand from '../commands/tickets/transcript.js';
 import snippetCommand from '../commands/snippets/snippet.js';
+import setupCheckCommand from '../commands/admin/setupCheck.js';
 
 // Collection des commandes
 const commands = new Collection<string, Command>();
@@ -29,6 +30,7 @@ const commands = new Collection<string, Command>();
 // Enregistrer toutes les commandes
 const commandList: Command[] = [
   setupCommand,
+  setupCheckCommand,
   ticketCommand,
   deleteCommand,
   renameCommand,

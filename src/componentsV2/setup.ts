@@ -118,9 +118,9 @@ export function buildFullSetupMessage(
     flags: MessageFlags.IsComponentsV2,
     components: [
       container,
-      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(baseChannelSelect) as any,
-      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(categorySelect) as any,
-      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(transcriptSelect) as any,
+      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(baseChannelSelect),
+      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(categorySelect),
+      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(transcriptSelect),
       new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(roleSelect),
       validateRow,
     ],

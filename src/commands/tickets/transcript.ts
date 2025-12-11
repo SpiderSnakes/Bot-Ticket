@@ -64,9 +64,23 @@ const transcriptCommand: Command = {
     const targetUser = interaction.options.getUser('envoyer_a');
     const channel = interaction.channel as TextChannel;
 
+    // Vérifier les permissions du bot
+    const me = interaction.guild.members.me;
+    if (!me || !channel.permissionsFor(me)?.has(['ViewChannel', 'ReadMessageHistory'])) {
+      await editReplyV2(
+        interaction,
+        createErrorV2Message(
+          'Permissions insuffisantes',
+          'Le bot ne peut pas lire l’historique de ce salon.'
+        )
+      );
+      return;
+    }
+
     try {
       // Récupérer tous les messages du salon
-      const messages = await fetchAllMessages(channel);
+      const MAX_MESSAGES = 2000;
+      const { messages, truncated } = await fetchAllMessages(channel, MAX_MESSAGES);
 
       // Générer le transcript
       const transcriptContent = generateTranscript(messages, format, channel.name);
@@ -112,7 +126,7 @@ const transcriptCommand: Command = {
         'Transcript généré !',
         `Le transcript a été généré avec succès.\n\n` +
           `📁 **Fichier :** \`${fileName}\`\n` +
-          `📊 **Messages :** ${messages.size}\n` +
+          `📊 **Messages :** ${messages.size}${truncated ? ' (troncature appliquée)' : ''}\n` +
           (transcriptChannel ? `📤 **Envoyé dans :** <#${transcriptChannel.id}>\n` : '') +
           (targetUser ? `📨 **Envoyé en MP à :** ${targetUser}` : '')
       );
@@ -134,9 +148,13 @@ const transcriptCommand: Command = {
 /**
  * Récupère tous les messages d'un salon
  */
-async function fetchAllMessages(channel: TextChannel): Promise<Collection<string, Message>> {
+async function fetchAllMessages(
+  channel: TextChannel,
+  maxMessages: number
+): Promise<{ messages: Collection<string, Message>; truncated: boolean }> {
   const allMessages = new Collection<string, Message>();
   let lastId: string | undefined;
+  let truncated = false;
 
   while (true) {
     const options: { limit: number; before?: string } = { limit: 100 };
@@ -153,12 +171,17 @@ async function fetchAllMessages(channel: TextChannel): Promise<Collection<string
     messages.forEach((msg) => allMessages.set(msg.id, msg));
     lastId = messages.last()?.id;
 
+    if (allMessages.size >= maxMessages) {
+      truncated = true;
+      break;
+    }
+
     if (messages.size < 100) {
       break;
     }
   }
 
-  return allMessages;
+  return { messages: allMessages, truncated };
 }
 
 /**

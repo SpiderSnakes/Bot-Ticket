@@ -11,6 +11,7 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   RoleSelectMenuBuilder,
+  ChannelSelectMenuBuilder,
   MessageFlags,
   MessageCreateOptions,
   InteractionReplyOptions,
@@ -24,6 +25,7 @@ type V2Component =
   | SectionBuilder
   | ActionRowBuilder<StringSelectMenuBuilder>
   | ActionRowBuilder<RoleSelectMenuBuilder>
+  | ActionRowBuilder<ChannelSelectMenuBuilder>
   | ActionRowBuilder<ButtonBuilder>;
 
 // Types pour les payloads Components V2
@@ -200,10 +202,10 @@ export function createSelectMenu(options: {
 /**
  * Crée un container complet avec accent color
  */
-export function createContainer(accentColor: number = COLORS.PRIMARY): ContainerBuilder {
-  // Pas de couleur : Components V2 sans accentColor
-  void accentColor;
-  return new ContainerBuilder();
+export function createContainer(_accentColor: number = COLORS.PRIMARY): ContainerBuilder {
+  // Couleurs désactivées : container neutre
+  const container = new ContainerBuilder();
+  return container;
 }
 
 /**
@@ -214,7 +216,6 @@ export function createSimpleV2Message(
   description: string,
   color: number = COLORS.PRIMARY
 ): V2MessageOptions {
-  void color;
   const container = createContainer(color)
     .addTextDisplayComponents(createTextDisplay(`## ${title}`))
     .addTextDisplayComponents(createTextDisplay(description));
