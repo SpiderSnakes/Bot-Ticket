@@ -10,6 +10,7 @@ import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  RoleSelectMenuBuilder,
   MessageFlags,
   MessageCreateOptions,
   InteractionReplyOptions,
@@ -22,6 +23,7 @@ type V2Component =
   | SeparatorBuilder
   | SectionBuilder
   | ActionRowBuilder<StringSelectMenuBuilder>
+  | ActionRowBuilder<RoleSelectMenuBuilder>
   | ActionRowBuilder<ButtonBuilder>;
 
 // Types pour les payloads Components V2

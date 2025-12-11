@@ -2,16 +2,32 @@ import {
   Interaction,
   ButtonInteraction,
   StringSelectMenuInteraction,
+  RoleSelectMenuInteraction,
   ModalSubmitInteraction,
 } from 'discord.js';
 import { log } from '../utils/logging.js';
 import { handleTicketSelectMenu, handleTicketButton, handleTicketModal } from '../features/tickets/ticketManager.js';
+import {
+  handleSetupRoleSelectMenu,
+  handleSetupRoleSaveButton,
+  handleSetupChannelSelect,
+  handleSetupFullRoleSelect,
+  handleSetupFullSave,
+} from '../features/setup/setupManager.js';
 import { replyV2 } from '../utils/v2Messages.js';
 import { createErrorV2Message } from '../componentsV2/builder.js';
 
 export async function handleInteraction(interaction: Interaction): Promise<void> {
   // Gestion des boutons
   if (interaction.isButton()) {
+    if (interaction.customId === 'setup_staff_save') {
+      await handleSetupRoleSaveButton(interaction);
+      return;
+    }
+    if (interaction.customId === 'setup_full_save') {
+      await handleSetupFullSave(interaction);
+      return;
+    }
     await handleButtonInteraction(interaction);
     return;
   }
@@ -19,6 +35,18 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
   // Gestion des menus déroulants (string select)
   if (interaction.isStringSelectMenu()) {
     await handleSelectMenuInteraction(interaction);
+    return;
+  }
+
+  // Gestion des menus de sélection de rôles (incluant full setup)
+  if (interaction.isRoleSelectMenu && interaction.isRoleSelectMenu()) {
+    await handleRoleSelectMenuInteraction(interaction as RoleSelectMenuInteraction);
+    return;
+  }
+
+  // Gestion des menus de sélection de salons (full setup)
+  if (interaction.isChannelSelectMenu && interaction.isChannelSelectMenu()) {
+    await handleChannelSelectMenuInteraction(interaction);
     return;
   }
 
@@ -61,6 +89,51 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
 
   // Menu inconnu
   log.warn(`Select menu inconnu: ${customId}`);
+  await replyV2(
+    interaction,
+    createErrorV2Message('Action inconnue', 'Ce menu n\'est pas reconnu.')
+  );
+}
+
+async function handleRoleSelectMenuInteraction(
+  interaction: RoleSelectMenuInteraction
+): Promise<void> {
+  const customId = interaction.customId;
+
+  log.debug(`Role select menu: ${customId} par ${interaction.user.tag}`);
+
+  if (customId === 'setup_staff_select') {
+    await handleSetupRoleSelectMenu(interaction);
+    return;
+  }
+
+  if (customId === 'setup_full_staff_roles') {
+    await handleSetupFullRoleSelect(interaction);
+    return;
+  }
+
+  log.warn(`Role select inconnu: ${customId}`);
+  await replyV2(
+    interaction,
+    createErrorV2Message('Action inconnue', 'Ce menu n\'est pas reconnu.')
+  );
+}
+
+async function handleChannelSelectMenuInteraction(interaction: any): Promise<void> {
+  const customId = interaction.customId;
+
+  log.debug(`Channel select menu: ${customId} par ${interaction.user.tag}`);
+
+  if (
+    customId === 'setup_full_base_channel' ||
+    customId === 'setup_full_category' ||
+    customId === 'setup_full_transcript'
+  ) {
+    await handleSetupChannelSelect(interaction);
+    return;
+  }
+
+  log.warn(`Channel select inconnu: ${customId}`);
   await replyV2(
     interaction,
     createErrorV2Message('Action inconnue', 'Ce menu n\'est pas reconnu.')
