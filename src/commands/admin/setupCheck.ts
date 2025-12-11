@@ -75,10 +75,9 @@ const setupCheckCommand: Command = {
     const baseText = baseChannelOk ? (baseChannel as TextChannel) : null;
     const transcriptText = transcriptOk ? (transcriptChannel as TextChannel) : null;
 
-    const permsOk =
-      botMember &&
-      baseText?.permissionsFor(botMember)?.has(REQUIRED_PERMS) === true &&
-      transcriptText?.permissionsFor(botMember)?.has(REQUIRED_PERMS) === true;
+    const basePerms = baseText?.permissionsFor(botMember ?? interaction.user) ?? null;
+    const transcriptPerms = transcriptText?.permissionsFor(botMember ?? interaction.user) ?? null;
+    const permsOk = basePerms?.has(REQUIRED_PERMS) === true && transcriptPerms?.has(REQUIRED_PERMS) === true;
 
     const lines: string[] = [
       formatStatus(baseChannelOk, 'Salon de base', baseChannelOk ? `<#${config.ticketBaseChannelId}>` : 'introuvable'),

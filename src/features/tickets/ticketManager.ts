@@ -12,7 +12,6 @@ import {
   MessageFlags,
   Message,
 } from 'discord.js';
-import type { Timeout } from 'node:timers';
 import { getGuildConfig } from '../../config/guildConfig.js';
 import { TicketType, TicketTypeId, getTicketTypeById, getTicketTypeByPrefix } from './ticketTypes.js';
 import { generateTicketChannelName, parseTicketChannelName } from './channelNaming.js';
@@ -42,7 +41,7 @@ interface TicketInfo {
   typeId: TicketTypeId;
   createdAt: Date;
   templateMessageIds: string[];
-  templateTimeout: Timeout | null;
+  templateTimeout: ReturnType<typeof setTimeout> | null;
 }
 
 const activeTickets = new Map<string, TicketInfo>();
